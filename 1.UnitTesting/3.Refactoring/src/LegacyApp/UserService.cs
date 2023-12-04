@@ -4,6 +4,23 @@ namespace LegacyApp
 {
     public class UserService
     {
+        private readonly IClock _clock;
+        private readonly IClientRepository _clientRepository;
+        private readonly IUserCreditServiceClientFactory _clientFactory;
+        private readonly IUserDataAccessAdapter _userDataAccess;
+
+        public UserService(IClock clock, IClientRepository clientRepository, IUserCreditServiceClientFactory clientFactory, IUserDataAccessAdapter userDataAccess)
+        {
+            _clock = clock;
+            _clientRepository = clientRepository;
+            _clientFactory = clientFactory;
+            _userDataAccess = userDataAccess;
+        }
+        
+        public UserService() : this(new SystemClock(), new ClientRepository(), new UserCreditServiceClientFactory(), new UserDataAccessAdapter())
+        {
+        }
+
         public bool AddUser(string firname, string surname, string email, DateTime dateOfBirth, int clientId)
         {
             if (string.IsNullOrEmpty(firname) || string.IsNullOrEmpty(surname))
@@ -16,7 +33,7 @@ namespace LegacyApp
                 return false;
             }
 
-            var now = DateTime.Now;
+            var now = _clock.Now;
             int age = now.Year - dateOfBirth.Year;
             if (now.Month < dateOfBirth.Month || (now.Month == dateOfBirth.Month && now.Day < dateOfBirth.Day)) age--;
 
@@ -25,8 +42,7 @@ namespace LegacyApp
                 return false;
             }
 
-            var clientRepository = new ClientRepository();
-            var client = clientRepository.GetById(clientId);
+            var client = _clientRepository.GetById(clientId);
 
             var user = new User
            {
@@ -46,7 +62,7 @@ namespace LegacyApp
             {
                 // Do credit check and double credit limit
                 user.HasCreditLimit = true;
-                using (var userCreditService = new UserCreditServiceClient())
+                using (var userCreditService = _clientFactory.CreateClient())
                 {
                     var creditLimit = userCreditService.GetCreditLimit(user.Firstname, user.Surname, user.DateOfBirth);
                     creditLimit = creditLimit*2;
@@ -57,7 +73,7 @@ namespace LegacyApp
             {
                 // Do credit check
                 user.HasCreditLimit = true;
-                using (var userCreditService = new UserCreditServiceClient())
+                using (var userCreditService = _clientFactory.CreateClient())
                 {
                     var creditLimit = userCreditService.GetCreditLimit(user.Firstname, user.Surname, user.DateOfBirth);
                     user.CreditLimit = creditLimit;
@@ -69,7 +85,7 @@ namespace LegacyApp
                 return false;
             }
 
-            UserDataAccess.AddUser(user);
+            _userDataAccess.AddUser(user);
             return true;
         }
     }
